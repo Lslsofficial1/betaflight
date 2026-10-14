@@ -284,6 +284,22 @@ TEST(AlignSensorTest, ClockwiseTwoSeventyDegreesFlip)
     testCWFlip(CW270_DEG_FLIP, 270);
 }
 
+TEST(AlignSensorTest, MicoAir743V2Bmi088Mounting)
+{
+    // ROTATION_ROLL_180_YAW_270 in the board's hardware definition maps
+    // (x, y, z) to (-y, -x, -z), not CW90_DEG_FLIP.
+    float viaRotation[XYZ_AXIS_COUNT] = { 1.0f, 2.0f, 3.0f };
+    float viaMatrix[XYZ_AXIS_COUNT] = { 1.0f, 2.0f, 3.0f };
+    const float expected[XYZ_AXIS_COUNT] = { -2.0f, -1.0f, -3.0f };
+
+    alignSensorViaRotation(viaRotation, CW270_DEG_FLIP);
+    alignSensorViaMatrixFromRotation(viaMatrix, CW270_DEG_FLIP);
+    for (unsigned axis = 0; axis < XYZ_AXIS_COUNT; axis++) {
+        EXPECT_NEAR(expected[axis], viaRotation[axis], TOL);
+        EXPECT_NEAR(expected[axis], viaMatrix[axis], TOL);
+    }
+}
+
 static void testBuildAlignmentWithStandardAlignment(sensor_align_e alignment, sensorAlignment_t expectedSensorAlignment)
 {
     sensorAlignment_t sensorAlignment = SENSOR_ALIGNMENT(6, 6, 6);

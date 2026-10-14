@@ -59,3 +59,8 @@ eeprom.bin
 # config used for building targets
 /src/config
 
+/fast_set_up
+compile_commands.json
+
+#clangd
+/.cache

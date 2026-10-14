@@ -3601,6 +3601,41 @@ static void cliGpsPassthrough(const char *cmdName, char *cmdline)
 #if defined(USE_GYRO_REGISTER_DUMP) && !defined(SIMULATOR_BUILD)
 static void cliPrintGyroRegisters(uint8_t whichSensor)
 {
+#ifdef USE_ACCGYRO_BMI088
+    gyroSensor_t *gyroSensor = &gyro.gyroSensor1;
+#ifdef USE_MULTI_GYRO
+    if (whichSensor == GYRO_CONFIG_USE_GYRO_2) {
+        gyroSensor = &gyro.gyroSensor2;
+    }
+#endif
+    const gyroDev_t *dev = &gyroSensor->gyroDev;
+    if (dev->mpuDetectionResult.sensor == BMI_088_SPI) {
+        static const struct {
+            const char *name;
+            uint8_t reg;
+        } registers[] = {
+            { "CHIP_ID", 0x00 },
+            { "RANGE", 0x0F },
+            { "BANDWIDTH", 0x10 },
+            { "LPM1", 0x11 },
+            { "INT_CTRL", 0x15 },
+            { "INT_IO_CONF", 0x16 },
+            { "INT_MAP", 0x18 },
+            { "SELF_TEST", 0x3C },
+        };
+        for (unsigned i = 0; i < ARRAYLEN(registers); i++) {
+            cliPrintLinef("# BMI088 %s 0x%02X", registers[i].name, gyroReadRegister(whichSensor, registers[i].reg));
+        }
+        cliPrintLinef("# BMI088 raw %d %d %d", dev->gyroADCRaw[X], dev->gyroADCRaw[Y], dev->gyroADCRaw[Z]);
+        cliPrintLinef("# BMI088 EXTI %u mode %u SPI divisor %u", (unsigned)dev->detectedEXTI,
+            (unsigned)dev->gyroModeSPI, (unsigned)dev->dev.busType_u.spi.speed);
+        cliPrintLinef("# BMI088 calibration remaining %d stddev %d %d %d", (int)gyroSensor->calibration.cyclesRemaining,
+            (int)lrintf(devStandardDeviation(&gyroSensor->calibration.var[X])),
+            (int)lrintf(devStandardDeviation(&gyroSensor->calibration.var[Y])),
+            (int)lrintf(devStandardDeviation(&gyroSensor->calibration.var[Z])));
+        return;
+    }
+#endif
     cliPrintLinef("# WHO_AM_I    0x%X", gyroReadRegister(whichSensor, MPU_RA_WHO_AM_I));
     cliPrintLinef("# CONFIG      0x%X", gyroReadRegister(whichSensor, MPU_RA_CONFIG));
     cliPrintLinef("# GYRO_CONFIG 0x%X", gyroReadRegister(whichSensor, MPU_RA_GYRO_CONFIG));
@@ -5122,6 +5157,9 @@ const cliResourceValue_t resourceTable[] = {
 #endif
     DEFW( OWNER_GYRO_EXTI,     PG_GYRO_DEVICE_CONFIG, gyroDeviceConfig_t, extiTag, MAX_GYRODEV_COUNT ),
     DEFW( OWNER_GYRO_CS,       PG_GYRO_DEVICE_CONFIG, gyroDeviceConfig_t, csnTag, MAX_GYRODEV_COUNT ),
+#ifdef USE_ACCGYRO_BMI088
+    DEFW( OWNER_ACC_CS,        PG_GYRO_DEVICE_CONFIG, gyroDeviceConfig_t, accCsnTag, MAX_GYRODEV_COUNT ),
+#endif
 #ifdef USE_USB_DETECT
     DEFS( OWNER_USB_DETECT,    PG_USB_CONFIG, usbDev_t, detectPin ),
 #endif

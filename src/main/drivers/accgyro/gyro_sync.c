@@ -53,6 +53,11 @@ uint16_t gyroSetSampleRate(gyroDev_t *gyro)
     uint16_t accSampleRateHz;
 
     switch (gyro->mpuDetectionResult.sensor) {
+        case BMI_088_SPI:
+            gyro->gyroRateKHz = GYRO_RATE_2_kHz;
+            gyroSampleRateHz = 2000;
+            accSampleRateHz = 800;
+            break;
         case BMI_160_SPI:
             gyro->gyroRateKHz = GYRO_RATE_3200_Hz;
             gyroSampleRateHz = 3200;

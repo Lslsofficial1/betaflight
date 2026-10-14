@@ -46,6 +46,7 @@
 #include "drivers/accgyro/accgyro_mpu3050.h"
 #include "drivers/accgyro/accgyro_mpu6050.h"
 #include "drivers/accgyro/accgyro_mpu6500.h"
+#include "drivers/accgyro/accgyro_spi_bmi088.h"
 #include "drivers/accgyro/accgyro_spi_bmi160.h"
 #include "drivers/accgyro/accgyro_spi_bmi270.h"
 #include "drivers/accgyro/accgyro_spi_icm20649.h"
@@ -364,6 +365,9 @@ static gyroSpiDetectFn_t gyroSpiDetectFnTable[] = {
 #ifdef USE_ACCGYRO_BMI270
     bmi270Detect,
 #endif
+#ifdef USE_ACCGYRO_BMI088
+    bmi088SpiDetect,
+#endif
 #if defined(USE_GYRO_SPI_ICM42605) || defined(USE_GYRO_SPI_ICM42688P)
     icm426xxSpiDetect,
 #endif
@@ -404,6 +408,13 @@ static bool detectSPISensorsAndUpdateDetectionResult(gyroDev_t *gyro, const gyro
     for (size_t index = 0 ; gyroSpiDetectFnTable[index] ; index++) {
         sensor = (gyroSpiDetectFnTable[index])(&gyro->dev);
         if (sensor != MPU_NONE) {
+#ifdef USE_ACCGYRO_BMI088
+            if (sensor == BMI_088_SPI && !bmi088SpiAccInitDevice(gyro, config)) {
+                spiPreinitByTag(config->csnTag);
+                spiPreinitByTag(config->accCsnTag);
+                return false;
+            }
+#endif
             gyro->mpuDetectionResult.sensor = sensor;
             busDeviceRegister(&gyro->dev);
             return true;
@@ -422,6 +433,9 @@ void mpuPreInit(const struct gyroDeviceConfig_s *config)
 {
 #ifdef USE_SPI_GYRO
     spiPreinitRegister(config->csnTag, IOCFG_IPU, 1);
+#ifdef USE_ACCGYRO_BMI088
+    spiPreinitRegister(config->accCsnTag, IOCFG_IPU, 1);
+#endif
 #else
     UNUSED(config);
 #endif

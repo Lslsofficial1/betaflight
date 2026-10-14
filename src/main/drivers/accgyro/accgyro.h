@@ -61,7 +61,8 @@ typedef enum {
     GYRO_BMI270,
     GYRO_LSM6DSO,
     GYRO_LSM6DSV16X,
-    GYRO_VIRTUAL
+    GYRO_VIRTUAL,
+    GYRO_BMI088
 } gyroHardware_e;
 
 typedef enum {
@@ -83,6 +84,7 @@ typedef enum {
     GYRO_RATE_8_kHz,
     GYRO_RATE_9_kHz,
     GYRO_RATE_32_kHz,
+    GYRO_RATE_2_kHz,
 } gyroRateKHz_e;
 
 typedef enum {
@@ -101,6 +103,10 @@ typedef struct gyroDev_s {
     sensorGyroReadDataFuncPtr temperatureFn;                  // read temperature if available
     extiCallbackRec_t exti;
     extDevice_t dev;
+#ifdef USE_ACCGYRO_BMI088
+    // BMI088 has independent SPI interfaces for its gyro and accelerometer.
+    extDevice_t bmi088AccDev;
+#endif
     float scale;                                             // scalefactor
     float gyroZero[XYZ_AXIS_COUNT];
     float gyroADC[XYZ_AXIS_COUNT];                           // gyro data after calibration and alignment

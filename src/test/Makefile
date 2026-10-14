@@ -51,6 +51,15 @@ atomic_unittest_SRC := \
 		$(USER_DIR)/build/atomic.c \
 		$(TEST_DIR)/atomic_unittest_c.c
 
+accgyro_bmi088_unittest_SRC := \
+		$(USER_DIR)/drivers/accgyro/accgyro_spi_bmi088.c \
+		$(USER_DIR)/drivers/accgyro/gyro_sync.c
+
+accgyro_bmi088_unittest_DEFINES := \
+		USE_ACCGYRO_BMI088= \
+		BMI088_GYRO_INT_PIN=3 \
+		SPI_IO_CS_CFG=0
+
 baro_bmp085_unittest_SRC := \
 		$(USER_DIR)/drivers/barometer/barometer_bmp085.c
 

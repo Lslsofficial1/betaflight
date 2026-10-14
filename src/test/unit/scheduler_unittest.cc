@@ -63,13 +63,14 @@ extern "C" {
 
     // set up micros() to simulate time
     uint32_t simulatedTime = 0;
+    int32_t cyclesPerUs = 10;
     uint32_t micros(void) { return simulatedTime; }
     uint32_t millis(void) { return simulatedTime/1000; } // Note simplistic mapping suitable only for short unit tests
-    int32_t clockCyclesToMicros(int32_t x) { return x/10;}
-    int32_t clockCyclesTo10thMicros(int32_t x) { return x;}
-    int32_t clockCyclesTo100thMicros(int32_t x) { return x * 10;}
-    uint32_t clockMicrosToCycles(uint32_t x) { return x*10;}
-    uint32_t getCycleCounter(void) {return simulatedTime * 10;}
+    int32_t clockCyclesToMicros(int32_t x) { return x / cyclesPerUs; }
+    int32_t clockCyclesTo10thMicros(int32_t x) { return x * 10 / cyclesPerUs; }
+    int32_t clockCyclesTo100thMicros(int32_t x) { return x * 100 / cyclesPerUs; }
+    uint32_t clockMicrosToCycles(uint32_t x) { return x * cyclesPerUs; }
+    uint32_t getCycleCounter(void) { return simulatedTime * cyclesPerUs; }
 
     // set up tasks to take a simulated representative time to execute
     bool gyroFilterReady(void) { return taskFilterReady; }
@@ -110,6 +111,7 @@ extern "C" {
     extern bool queueRemove(task_t *task);
     extern task_t *queueFirst(void);
     extern task_t *queueNext(void);
+    uint32_t schedulerGyroRateCount(uint32_t periodCycles);
 
     task_t tasks[TASK_COUNT];
 
@@ -301,6 +303,40 @@ TEST(SchedulerUnittest, TestSchedulerInit)
     schedulerInit();
     EXPECT_EQ(1, taskQueueSize);
     EXPECT_EQ(&tasks[TASK_SYSTEM], queueFirst());
+}
+
+TEST(SchedulerUnittest, SlowGyroRateWindowFitsH743CycleCounter)
+{
+    const uint32_t periodCycles = 480 * 500; // 480 MHz, BMI088 at 2 kHz.
+    const uint32_t count = schedulerGyroRateCount(periodCycles);
+    ASSERT_GT(count, 0U);
+    EXPECT_LT(count, static_cast<uint32_t>(GYRO_RATE_COUNT));
+    EXPECT_LE(static_cast<uint64_t>(count) * periodCycles, static_cast<uint64_t>(INT32_MAX));
+
+    // Reproduce the old window's lost wrap, then cross a wrap using the
+    // bounded window and verify that unsigned subtraction remains exact.
+    const uint32_t oldElapsed = static_cast<uint32_t>(static_cast<uint64_t>(GYRO_RATE_COUNT) * periodCycles);
+    EXPECT_NE(periodCycles, oldElapsed / GYRO_RATE_COUNT);
+    const uint32_t start = UINT32_MAX - 1000;
+    const uint32_t end = start + count * periodCycles;
+    EXPECT_EQ(periodCycles, (end - start) / count);
+}
+
+TEST(SchedulerUnittest, FastGyroRetainsOriginalRateWindow)
+{
+    EXPECT_EQ(static_cast<uint32_t>(GYRO_RATE_COUNT), schedulerGyroRateCount(480 * 125));
+    EXPECT_EQ(static_cast<uint32_t>(GYRO_RATE_COUNT), schedulerGyroRateCount(168 * 500));
+}
+
+TEST(SchedulerUnittest, GyroRateWindowHandlesOtherSlowRates)
+{
+    for (const uint32_t periodCycles : {480U * 250, 480U * 1000, 600U * 500, UINT32_MAX}) {
+        const uint32_t count = schedulerGyroRateCount(periodCycles);
+        EXPECT_GE(count, 1U);
+        EXPECT_LE(count, static_cast<uint32_t>(GYRO_RATE_COUNT));
+        EXPECT_LE(static_cast<uint64_t>(count) * periodCycles, static_cast<uint64_t>(UINT32_MAX));
+    }
+    EXPECT_EQ(1U, schedulerGyroRateCount(0));
 }
 
 TEST(SchedulerUnittest, TestScheduleEmptyQueue)
@@ -552,5 +588,35 @@ TEST(SchedulerUnittest, TestGyroTask)
     EXPECT_TRUE(taskPidRan);
     // expect that no other tasks other tasks should have run
     EXPECT_EQ(static_cast<task_t*>(0), unittest_scheduler_selectedTask);
+}
+
+TEST(SchedulerUnittest, SlowGyroSchedulerSurvivesH743CounterWrap)
+{
+    const uint32_t savedTime = simulatedTime;
+    cyclesPerUs = 480;
+    simulatedTime = 0;
+    rescheduleTask(TASK_GYRO, 500);
+    schedulerInit();
+    queueClear();
+    schedulerEnableGyro();
+    resetGyroTaskTestFlags();
+    gyro.gyroModeSPI = GYRO_EXTI_INT;
+    gyro.detectedEXTI = 0;
+    tasks[TASK_GYRO].lastExecutedAtUs = 0;
+
+    // Run the actual interrupt-rate estimator across both the cycle-counter
+    // wrap at 8.95 seconds and the old 12.5-second measurement window.
+    for (unsigned sample = 1; sample <= 30000; sample++) {
+        simulatedTime = sample * 500;
+        gyro.detectedEXTI = sample;
+        gyro.gyroSyncEXTI = getCycleCounter();
+        scheduler();
+    }
+    EXPECT_NEAR(1.0f, schedulerGetCycleTimeMultiplier(), 0.001f);
+
+    gyro.gyroModeSPI = GYRO_EXTI_NO_INT;
+    cyclesPerUs = 10;
+    simulatedTime = savedTime;
+    rescheduleTask(TASK_GYRO, TASK_PERIOD_HZ(TEST_GYRO_SAMPLE_HZ));
 }
 

@@ -126,6 +126,18 @@ static timeMs_t lastFailsafeCheckMs = 0;
 #endif
 STATIC_UNIT_TESTED FAST_DATA_ZERO_INIT task_t* taskQueueArray[TASK_COUNT + 1 + TASK_QUEUE_RESERVE]; // extra item for NULL pointer at end of queue (+ overflow check in UNTT_TEST)
 
+STATIC_UNIT_TESTED uint32_t schedulerGyroRateCount(uint32_t periodCycles)
+{
+    // The 32-bit CPU cycle counter wraps in less than nine seconds at
+    // 480 MHz. 25000 samples at 2 kHz span 12.5 seconds, so the original
+    // averaging window loses a complete wrap. Keep half a counter's range
+    // as headroom, while retaining the normal window for faster gyros.
+    if (!periodCycles) {
+        return 1;
+    }
+    return MAX((uint32_t)1, MIN((uint32_t)GYRO_RATE_COUNT, (uint32_t)INT32_MAX / periodCycles));
+}
+
 void queueClear(void)
 {
     memset(taskQueueArray, 0, sizeof(taskQueueArray));
@@ -598,19 +610,22 @@ FAST_CODE void scheduler(void)
             if (gyro->gyroModeSPI != GYRO_EXTI_NO_INT) {
                 // Track the actual gyro rate over given number of cycle times and set the expected timebase
                 static uint32_t terminalGyroRateCount = 0;
-                static int32_t sampleRateStartCycles;
+                static uint32_t sampleRateStartCycles;
+                static uint32_t gyroRateCount;
 
                 if (terminalGyroRateCount == 0) {
-                    terminalGyroRateCount = gyro->detectedEXTI + GYRO_RATE_COUNT;
+                    gyroRateCount = schedulerGyroRateCount(desiredPeriodCycles);
+                    terminalGyroRateCount = gyro->detectedEXTI + gyroRateCount;
                     sampleRateStartCycles = nowCycles;
                 }
 
                 if (gyro->detectedEXTI >= terminalGyroRateCount) {
                     // Calculate the number of clock cycles on average between gyro interrupts
                     uint32_t sampleCycles = nowCycles - sampleRateStartCycles;
-                    desiredPeriodCycles = sampleCycles / GYRO_RATE_COUNT;
+                    desiredPeriodCycles = sampleCycles / gyroRateCount;
                     sampleRateStartCycles = nowCycles;
-                    terminalGyroRateCount += GYRO_RATE_COUNT;
+                    gyroRateCount = schedulerGyroRateCount(desiredPeriodCycles);
+                    terminalGyroRateCount += gyroRateCount;
                 }
 
                 // Track the actual gyro rate over given number of cycle times and remove skew

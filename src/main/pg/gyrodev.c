@@ -51,6 +51,15 @@
 #define GYRO_2_EXTI_PIN NONE
 #endif
 
+#ifdef USE_ACCGYRO_BMI088
+#ifndef GYRO_1_ACC_CS_PIN
+#define GYRO_1_ACC_CS_PIN NONE
+#endif
+#ifndef GYRO_2_ACC_CS_PIN
+#define GYRO_2_ACC_CS_PIN NONE
+#endif
+#endif
+
 #ifdef MPU_ADDRESS
 #define GYRO_I2C_ADDRESS MPU_ADDRESS
 #else
@@ -146,11 +155,22 @@ static void gyroResetI2cDeviceConfig(gyroDeviceConfig_t *devconf, I2CDevice i2cb
 }
 #endif
 
+#ifdef USE_ACCGYRO_BMI088
+// The additional CS resource changes the persistent configuration layout.
+PG_REGISTER_ARRAY_WITH_RESET_FN(gyroDeviceConfig_t, MAX_GYRODEV_COUNT, gyroDeviceConfig, PG_GYRO_DEVICE_CONFIG, 1);
+#else
 PG_REGISTER_ARRAY_WITH_RESET_FN(gyroDeviceConfig_t, MAX_GYRODEV_COUNT, gyroDeviceConfig, PG_GYRO_DEVICE_CONFIG, 0);
+#endif
 
 void pgResetFn_gyroDeviceConfig(gyroDeviceConfig_t *devconf)
 {
     devconf[0].index = 0;
+#ifdef USE_ACCGYRO_BMI088
+    devconf[0].accCsnTag = IO_TAG(GYRO_1_ACC_CS_PIN);
+#ifdef USE_MULTI_GYRO
+    devconf[1].accCsnTag = IO_TAG(GYRO_2_ACC_CS_PIN);
+#endif
+#endif
     // All multi-gyro boards use SPI based gyros.
 #ifdef USE_SPI_GYRO
 #ifdef GYRO_1_SPI_INSTANCE

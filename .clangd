@@ -1,0 +1,13 @@
+# Generated for ARM Betaflight code navigation, not firmware compilation.
+CompileFlags:
+  Add: ["-fblocks"]
+  Remove:
+    - "-Werror"
+    - "-Wunsafe-loop-optimizations"
+    - "-fuse-linker-plugin"
+    - "-flto"
+    - "-flto=*"
+    - "-fno-fat-lto-objects"
+    - "-fsingle-precision-constant"
+    - "-fno-tree-loop-distribute-patterns"
+    - "--specs=*"
