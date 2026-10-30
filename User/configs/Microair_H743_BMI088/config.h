@@ -31,7 +31,10 @@
 #define USE_GYRO
 #define USE_ACCGYRO_BMI088
 #define USE_BARO
+// SPL06 uses the DPS310-compatible register map in Betaflight 4.5.2.
 #define USE_BARO_DPS310
+#define USE_MAG
+#define USE_MAG_QMC5883
 #define USE_SDCARD
 #define USE_MAX7456
 
@@ -65,6 +68,9 @@
 #define I2C2_SCL_PIN PB10
 #define I2C1_SDA_PIN PB9
 #define I2C2_SDA_PIN PB11
+// SPL06 and QMC5883L share the onboard I2C2 bus. Speed is in kHz.
+#define I2C2_CLOCKSPEED 400
+#define BARO_EOC_PIN PD0 // Wired DRDY; the DPS310 driver polls without EXTI.
 #define LED0_PIN PE3
 #define LED1_PIN PE2
 #define LED2_PIN PE4
@@ -126,8 +132,10 @@
 #define ESC_SENSOR_UART      SERIAL_PORT_USART7
 #define SERIALRX_UART        SERIAL_PORT_USART6
 
-#define MAG_I2C_INSTANCE I2CDEV_1
+#define MAG_I2C_INSTANCE I2CDEV_2
+#define MAG_I2C_ADDRESS 0x0D
 #define BARO_I2C_INSTANCE I2CDEV_2
+#define DEFAULT_BARO_I2C_ADDRESS 0x77
 #define ADC_INSTANCE ADC1
 #define DEFAULT_BLACKBOX_DEVICE BLACKBOX_DEVICE_SDCARD
 #define DEFAULT_CURRENT_METER_SOURCE CURRENT_METER_ADC

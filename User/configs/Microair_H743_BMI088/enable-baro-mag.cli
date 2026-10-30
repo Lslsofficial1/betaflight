@@ -1,0 +1,25 @@
+# Only for the updated Betaflight 4.5.2 MICOAIR743V2_BMI088 target.
+# Remove propellers, use USB power, and back up diff all / dump all first.
+# No defaults/full erase: preserve unrelated settings and existing calibration.
+# Batch errors prevent save; successful save reboots the flight controller.
+batch start
+
+resource I2C_SCL 2 B10
+resource I2C_SDA 2 B11
+resource BARO_EOC 1 D00
+set i2c2_clockspeed_khz = 400
+
+# SPL06: DPS310-compatible driver, I2C2, 7-bit address 0x77 (119 decimal).
+# PD0 is recorded as BARO_EOC; this driver polls and does not enable EXTI.
+set baro_bustype = I2C
+set baro_i2c_device = 2
+set baro_i2c_address = 119
+set baro_hardware = DPS310
+
+# QMC5883L: I2C2, 7-bit address 0x0D (13 decimal), no DRDY GPIO required.
+set mag_bustype = I2C
+set mag_i2c_device = 2
+set mag_i2c_address = 13
+set mag_hardware = QMC5883
+
+save

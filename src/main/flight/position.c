@@ -82,7 +82,7 @@ typedef enum {
 PG_REGISTER_WITH_RESET_TEMPLATE(positionConfig_t, positionConfig, PG_POSITION, 4);
 
 PG_RESET_TEMPLATE(positionConfig_t, positionConfig,
-    .altitude_source = DEFAULT,
+    .altitude_source = BARO_ONLY,
     .altitude_prefer_baro = 100, // percentage 'trust' of baro data
     .altitude_lpf = 300,
     .altitude_d_lpf = 100,

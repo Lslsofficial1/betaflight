@@ -82,12 +82,24 @@ baro_bmp388_unittest_DEFINES := \
                 USE_BARO_BMP388= \
                 USE_BARO_SPI_BMP388=
 
+baro_dps310_unittest_SRC := \
+		$(USER_DIR)/drivers/barometer/barometer_dps310.c
+
+baro_dps310_unittest_DEFINES := \
+		USE_BARO_DPS310=
+
 baro_ms5611_unittest_SRC := \
 		$(USER_DIR)/drivers/barometer/barometer_ms5611.c
 
 baro_ms5611_unittest_DEFINES := \
                 USE_BARO_MS5611= \
                 USE_BARO_SPI_MS5611=
+
+compass_qmc5883l_unittest_SRC := \
+		$(USER_DIR)/drivers/compass/compass_qmc5883l.c
+
+compass_qmc5883l_unittest_DEFINES := \
+		USE_MAG_QMC5883=
 
 # This test is disabled due to build errors.
 # Its source code is archived in unit/battery_unittest.cc.txt

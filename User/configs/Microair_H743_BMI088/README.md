@@ -22,7 +22,27 @@
 若将来硬件接到 INT4，应改成 `4` 并重新编译；仅修改 STM32 的 EXTI 引脚不足以
 改变 BMI088 内部中断映射。加速度计独立的中断引脚未用于本驱动。
 
-其他外设沿用原配置，MAX7456 仍在 SPI1；不再配置原 BMI270 使用的 SPI3。
+MAX7456 仍在 SPI1；不再配置原 BMI270 使用的 SPI3。板载气压计、磁力计使用下面
+独立说明的 I2C2 配置，原 BMI270 配置文件仍保留不变。
+
+### 板载 SPL06 气压计与 QMC5883L 磁力计
+
+根据 [MicoAir743v2 官方引脚表](https://micoair.cn/zh/docs/flight-controller/micoair743/micoair743v2-flight-controller-manual)，
+这两个设备共用 **I2C2：SCL = PB10、SDA = PB11**。
+
+| 设备 / 信号 | 配置 | 说明 |
+| --- | --- | --- |
+| SPL06 | `USE_BARO`、`USE_BARO_DPS310` | BF 4.5.2 沿用 DPS310 兼容驱动；CLI 显示 DPS310，不存在 `USE_BARO_SPL06`。 |
+| SPL06 总线 / 地址 | `BARO_I2C_INSTANCE I2CDEV_2`、`DEFAULT_BARO_I2C_ADDRESS 0x77` | 地址来自 [ArduPilot 的同板定义](https://github.com/ArduPilot/ardupilot/blob/master/libraries/AP_HAL_ChibiOS/hwdef/MicoAir743v2/hwdef.dat)，不是驱动默认的 `0x76`。 |
+| SPL06_DR | `BARO_EOC_PIN PD0` | 记录板级接线。现有 DPS310 驱动定时读取，不配置或依赖此 GPIO 的 EXTI。 |
+| QMC5883L | `USE_MAG`、`USE_MAG_QMC5883` | CLI 驱动名称为 `QMC5883`，不是 `QMC5883L`。 |
+| QMC5883L 总线 / 地址 | `MAG_I2C_INSTANCE I2CDEV_2`、`MAG_I2C_ADDRESS 0x0D` | 与 SPL06 地址不同，可以共享总线；不需要额外 DRDY 接线。 |
+| I2C2 时钟 | `I2C2_CLOCKSPEED 400` | 单位 kHz，避免沿用本分支的默认 800 kHz。 |
+
+这些宏设置的是**恢复默认配置时的值**，并不保证覆盖刷写前已经保存的参数。
+保留参数刷写后，还需要按第 6 节检查和更新总线、地址、时钟与硬件选择。
+磁力计的安装方向不能由 I2C 引脚推断，未直接套用 BMI088 的旋转；实际航向使用前
+必须检查方向并完成整机磁力计校准。
 
 ### 安装方向与晶振
 
@@ -170,3 +190,64 @@ make -C src/test -j4 test_accgyro_bmi088_unittest \
 寄存器和 SPI 协议依据：[Bosch BMI088 数据手册](https://www.bosch-sensortec.com/media/boschsensortec/downloads/datasheets/bst-bmi088-ds001.pdf)。
 
 本次修复的诊断、备份、刷写和 USB 实板验证记录见 [VALIDATION.md](VALIDATION.md)。
+该记录只对应 2026-10-12 的 BMI088 验证，不能作为新增气压计、磁力计的实板验证。
+
+## 6. 启用板载气压计和磁力计
+
+### 保留旧参数升级
+
+1. 拆桨、仅 USB 供电，保存当前 CLI 的 `diff all` / `dump all`；核对 `version`
+   中的板名为 `MICOAIR743V2_BMI088`。先刷写本配置生成的新 HEX，不能向其他目标
+   直接导入下面的文件。
+2. 在 CLI 中导入 [enable-baro-mag.cli](enable-baro-mag.cli)。它只修改这两个传感器
+   的硬件选择、I2C2 资源、地址、时钟与气压计 DRDY 资源；不清空参数，不修改电机、
+   接收机、PID 或磁力计校准值。文件末尾 `save` 会保存并重启。
+3. 若出现任何 `ERROR`，不要继续飞行。文件使用 `batch start`，本版本 CLI 在批处理
+   出错时会拒绝保存；先解决错误，不能删除错误行后盲目重试。
+
+文件中地址使用 CLI 所需的**十进制 7 位地址**：SPL06 的 `119` 即 `0x77`，
+QMC5883L 的 `13` 即 `0x0D`。`baro_hardware = DPS310` 是为 SPL06 选择兼容驱动，
+并不是将实际芯片改为 DPS310。不要把这两个地址左移成 8 位读写地址。
+
+### 重启后检查
+
+```text
+version
+status
+resource
+get baro_
+get mag_
+get i2c2_
+tasks
+```
+
+预期 `baro_bustype`、`mag_bustype` 都是 `I2C`，两个 `i2c_device` 都是 `2`，
+地址分别为 `119` 和 `13`，`i2c2_clockspeed_khz = 400`。
+资源应包含 `I2C_SCL 2 B10`、`I2C_SDA 2 B11`、`BARO_EOC 1 D00`。
+`status` 应检测到 `BARO=DPS310` 与 `MAG=QMC5883`，`tasks` 中应启用 BARO/MAG
+相关任务；**仅有资源或配置值正确，不代表传感器已识别**。
+
+使用传感器页面或 MSP 采样确认压力、高度及磁场数据持续更新，轻抬飞控验证相对
+气压高度响应，远离磁铁和大电流线缓慢转动飞控检查磁场响应，并执行磁力计校准、
+核对航向方向。观察稳定运行时 I2C 错误计数是否持续增加；启动时 AUTO 探测其他
+地址可能产生少量错误，不能单凭启动错误计数非零判定失败。
+PD0 在本驱动中不输出诊断中断计数，资源显示正确也不证明其中断已启用。
+以上检查通过之前，不应据此启用依赖这些传感器的飞行功能。
+
+### 软件验证
+
+在仓库根目录执行：
+
+```bash
+make -C src/test -j4 \
+  test_baro_dps310_unittest test_compass_qmc5883l_unittest \
+  test_accgyro_bmi088_unittest test_sensor_gyro_unittest \
+  test_alignsensor_unittest test_scheduler_unittest \
+  CC=clang CXX=clang++ LDFLAGS=-Wl,-T,unit/pg.ld \
+  OBJECT_DIR=../../obj/test-microair-sensors-20261021
+```
+
+新增 DPS310/SPL06 兼容路径的 11 项测试和 QMC5883L 的 9 项测试，连同现有 56 项
+回归，共 76 项。它们使用模拟 I2C，验证地址、识别、初始化、标定系数补偿、字节序、
+就绪状态和部分传输失败路径，不验证真实接线、I2C 电平、气压精度或磁场干扰。
+本次结果与验证边界见 [SENSORS_VALIDATION.md](SENSORS_VALIDATION.md)。
